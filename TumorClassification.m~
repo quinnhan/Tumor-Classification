@@ -1,0 +1,48 @@
+%% Brain Tumor Classification
+% initialize work space
+clear all, close all, clc
+
+
+% First task is to import the image data into different matrices
+
+yesfolder = 'TumorDataset/yes';
+nofolder = 'TumorDataset/no';
+
+yesfiles = dir(fullfile(yesfolder));
+nofiles = dir(fullfile(nofolder));
+
+yesfiles(1:2) = []; % deleting directory elements
+[val, idx] = min([yesfiles.bytes]);
+smallestimageyes = fullfile(yesfolder,yesfiles(idx).name);
+[rows, columns, colorchannels] = size(imread(smallestimageyes));
+% loop through each folder and add images to matrix
+
+% yes dataset
+YesData = [];
+for i = 1:length(yesfiles)
+    basefilename = yesfiles(i).name;
+    fullfilename = fullfile(yesfolder,basefilename);
+    im = imread(fullfilename);
+    if size(im,3) > 1 % checks if image is not gray
+        im = rgb2gray(im); % converting to gray scale for easier analysis
+    end
+    imr = imresize(im,[rows,columns]);
+    YesData(:,i) = double(imr(:));
+end
+
+nofiles(1:2) = [];
+[val,idx] = min([nofiles.bytes]);
+smallestimageno = fullfile(nofolder,nofiles(idx).name);
+[rows2, columns2, colorchannels2] = size(imread(smallestimageno));
+
+% no dataset
+NoData = [];
+for j = 3:length(nofiles)
+    basefilename = nofiles(j).name;
+    fullfilename = fullfile(nofolder,basefilename);
+    im = imread(fullfilename);
+    if size(im,3) > 1 % checks if image is not gray
+        im = rgb2gray(im); % converting to gray scale for easier analysis
+    end
+    NoData(:,j) = doube(im(:));
+end
