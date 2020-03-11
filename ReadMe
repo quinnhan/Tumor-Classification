@@ -1,1 +1,4 @@
 Have the data set committed and created the base code to load the images and populate the test/train sets. -CS
+
+Have a basic classification algorithm using MATLAB's SVM with a basic FFT transformation. Getting around 60% accurate. 
+Maybe try different wavelet transformation next? -CS
