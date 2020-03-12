@@ -44,12 +44,6 @@ for i = 1:length(yesfiles)
     YesData(:,i) = double(imr(:));
 end
 
-% repeating the same as above for the No images
-nofiles(1:2) = [];
-[val2,idx2] = min([nofiles.bytes]);
-smallestimageno = fullfile(nofolder,nofiles(idx2).name);
-[rows2, columns2, colorchannels2] = size(imread(smallestimageno));
-
 % no dataset
 NoData = []; 
 for j = 1:length(nofiles)
@@ -63,33 +57,15 @@ for j = 1:length(nofiles)
     NoData(:,j) = double(imr(:));
 end
 
-
-%% Split into training test groups
-
-q1 = randperm(size(YesData,2));
-q2 = randperm(size(NoData,2));
-
-% split the training/test data by a set amount
-split_yes = floor(0.8*length(q1)); 
-split_no = floor(0.8*length(q2));
-
-YesData_train = YesData(:,q1(1:split_yes));
-YesData_test = YesData(:,q1((split_yes + 1):end));
-
-NoData_train = NoData(:,q2(1:split_no));
-NoData_test = NoData(:,q2((split_no + 1):end));
-
-
-X_test = [YesData_test, NoData_test];
 %% Look at FFT of some images
 
 % comparing the yes and the no images along with their respective FFT's
 for i = 1:3
-    ys = YesData_train(:,i);
-    ns = NoData_train(:,i);
+    ys = YesData(:,i);
+    ns = NoData(:,i);
 
     im_y = reshape(ys,rows,columns);
-    im_n = reshape(ns,rows2,columns2);
+    im_n = reshape(ns,rows,columns);
 
     L = length(ys)/8400; % i didn't know what to put for here but I don't think it matters?
 
@@ -118,41 +94,66 @@ for i = 1:3
     plot(kns(1:end-1),abs(fftshift(ns_f))/max(ns_f))
 end
 
+%% Split into training test groups
+testruns = 20;
+percentage = zeros(1,testruns);
+for p = 1:testruns
+    
+q1 = randperm(size(YesData,2));
+q2 = randperm(size(NoData,2));
+
+% split the training/test data by a set amount
+split_yes = floor(0.8*length(q1)); 
+split_no = floor(0.8*length(q2));
+
+YesData_train = YesData(:,q1(1:split_yes));
+YesData_test = YesData(:,q1((split_yes + 1):end));
+
+NoData_train = NoData(:,q2(1:split_no));
+NoData_test = NoData(:,q2((split_no + 1):end));
+
+
+X_test = [YesData_test, NoData_test];
+
 %% FFT the images and take SVD
 X = [YesData_train, NoData_train];
 
-X_fft = zeros(size(X));
-for l = 1:length(YesData_train(1,:))
-    X_fft(:,l) = abs(fft(YesData_train(:,l)));
-end
+% X_fft = zeros(size(X));
+% for l = 1:length(YesData_train(1,:))
+%     X_fft(:,l) = abs(fft(YesData_train(:,l)));
+% end
+
+% try wavelet transform instead
+X_fft = tc_wavelet(X,rows,columns);
+X_test_wav = tc_wavelet(X_test,rows,columns);
 
 [U,S,V] = svd(X_fft,'econ');
 %% Graph some stuff
 
-figure()
+%figure()
 sig = diag(S);
 [M,N] = size(X);
 
-subplot(1,2,1), plot(sig(1:50),'ko','Linewidth',[1.5])
+%subplot(1,2,1), plot(sig(1:50),'ko','Linewidth',[1.5])
 ylabel('Singular Values')
 xlabel('Singular Value Along Diagonal')
 
-subplot(1,2,2), semilogy(sig(1:50),'ko','Linewidth',[1.5])
+%subplot(1,2,2), semilogy(sig(1:50),'ko','Linewidth',[1.5])
 ylabel('Log of Singular Values')
 xlabel('Singular Value Along Diagonal')
 
 %% Run through matlab classify
 
-numFeat = 10;
+numFeat = 30;
 
 xtrain = V(:,1:numFeat);
-xtest = U'*X_test;
+xtest = U'*X_test_wav;
 
 ctrain = [repmat({'Tumor'},[size(YesData_train,2),1]);repmat({'NoTumor'},[size(NoData_train,2),1])];
 truth = [repmat({'Tumor'},[size(YesData_test,2),1]);repmat({'NoTumor'},[size(NoData_test,2),1])];
 
-svm.mod = fitcsvm(V,ctrain);
-pre = predict(svm.mod,xtest');
+svm.mod = fitcsvm(xtrain,ctrain);
+pre = predict(svm.mod,xtest(:,1:numFeat));
 
 num_correct = 0;
 for k = 1:length(truth)
@@ -160,4 +161,6 @@ for k = 1:length(truth)
         num_correct = num_correct + 1;
    end
 end
-percentage = (num_correct/length(truth))*100
+percentage(p) = (num_correct/length(truth))*100;
+end
+mean(percentage)
