@@ -28,6 +28,9 @@ else
     smallestimage = fullfile(nofolder,nofiles(idx2).name);
 end
 [rows, columns, colorchannels] = size(imread(smallestimage)); % get size of smallest image
+rows = mean([rows,columns]); % making it square
+columns = rows;
+
 
 % loop through each folder and add images to matrix
 
@@ -60,7 +63,7 @@ end
 %% Look at FFT of some images
 
 % comparing the yes and the no images along with their respective FFT's
-for i = 1:3
+for i = 1:2
     ys = YesData(:,i);
     ns = NoData(:,i);
 
@@ -81,86 +84,173 @@ for i = 1:3
     ns_f = fft(ns);
 
     figure (i)
+    sgtitle('MRI images and their respective FFTs')
     subplot(2,2,1)
     imshow(uint8(im_y))
-
+    title('Tumor')
+    
     subplot(2,2,2)
     imshow(uint8(im_n))
+    title('No Tumor')
 
     subplot(2,2,3)
     plot(ks,abs(fftshift(ys_f))/max(ys_f))
+    xlim([-10000,10000])
+    ylim([0,0.2])
+    title('FFT Tumor')
 
     subplot(2,2,4)
     plot(kns(1:end-1),abs(fftshift(ns_f))/max(ns_f))
+    xlim([-10000,10000])
+    ylim([0,0.2])
+    title('FFT No Tumor')
 end
 
 %% Split into training test groups
 testruns = 20;
 percentage = zeros(1,testruns);
+errNum = zeros(1,testruns);
 for p = 1:testruns
+
+    q1 = randperm(size(YesData,2));
+    q2 = randperm(size(NoData,2));
+
+    % split the training/test data by a set amount
+    split_yes = floor(0.8*length(q1)); 
+    split_no = floor(0.8*length(q2));
+
+    YesData_train = YesData(:,q1(1:split_yes));
+    YesData_test = YesData(:,q1((split_yes + 1):end));
+
+    NoData_train = NoData(:,q2(1:split_no));
+    NoData_test = NoData(:,q2((split_no + 1):end));
+
+    numFeat = 10;
+
+    X_test = [YesData_test, NoData_test];
+
+    % This next procedure was used as a comparison to the professor's method.
+    %
+    % This first does a FFT on the data then that's fed through the SVD and
+    % classified with MATLAB's classify function. 
     
-q1 = randperm(size(YesData,2));
-q2 = randperm(size(NoData,2));
+%     % FFT the images and take SVD
+%     X = [YesData_train, NoData_train];
+% 
+%     X_fft = zeros(size(X));
+%     for l = 1:size(X,2)
+%         X_fft(:,l) = abs(fft(X(:,l)));
+%     end
+% 
+%     %X_test_wav = X_test;
+%     X_test_wav = zeros(size(X_test));
+%     for k = 1:size(X_test,2)
+%         X_test_wav(:,k) = abs(fft(X_test(:,k)));
+%     end
+%
+%    [U,S,V] = svd(X_fft,'econ');
+%
+%    % Run through matlab classify
+%
+%     U = U(:,1:numFeat);
+%     xtrain = V(:,1:numFeat);
+%     xtest = U'*X_test_wav;
+%     xtest = xtest(:,1:numFeat);
+% 
+%     ctrain = [repmat({'Tumor'},[size(YesData_train,2),1]);repmat({'NoTumor'},[size(NoData_train,2),1])];
+%     truth = [repmat({'Tumor'},[size(YesData_test,2),1]);repmat({'NoTumor'},[size(NoData_test,2),1])];
+% 
+%     %svm.mod = fitcecoc(xtrain,ctrain);
+%     %pre = predict(svm.mod,xtest);
+%
+%     pre = classify(xtest,xtrain,ctrain);
+% 
+%     num_correct = 0;
+%     for k = 1:length(pre)
+%        if strcmp(pre{k},truth{k})
+%             num_correct = num_correct + 1;
+%        end
+%     end
+%     percentage(p) = (num_correct/length(truth))*100;
 
-% split the training/test data by a set amount
-split_yes = floor(0.8*length(q1)); 
-split_no = floor(0.8*length(q2));
+% attempt at using the LDA that the professor used for the dog and cat data
 
-YesData_train = YesData(:,q1(1:split_yes));
-YesData_test = YesData(:,q1((split_yes + 1):end));
+    Yes_wave = tc_wavelet(YesData_train,rows,columns);
+    No_wave = tc_wavelet(NoData_train,rows,columns);
+    [result,w,U,S,V,threshold,sorttumor,sortnotumor] = tc_trainer(Yes_wave,No_wave,numFeat);
+    Test_Wave = tc_wavelet(X_test, rows, columns);
+    Test_Mat = U'*Test_Wave;
+    pval = w'*Test_Mat;
+    
+    hiddenlabels = [zeros(1,size(YesData_test,2)), ones(1,size(NoData_test,2))];
 
-NoData_train = NoData(:,q2(1:split_no));
-NoData_test = NoData(:,q2((split_no + 1):end));
+    [mt,TestNum] = size(X_test);
+
+    ResVec = (pval>threshold);
+    %disp('Number of mistakes');
+    errNum(p) = sum(abs(ResVec - hiddenlabels));
+    %disp('Rate of success'); 
+    percentage(p) = (1-errNum(p)/TestNum)*100;
 
 
-X_test = [YesData_test, NoData_test];
+end
+disp('Average percentage correct')
+mean(percentage)
 
-%% FFT the images and take SVD
-X = [YesData_train, NoData_train];
-
-% X_fft = zeros(size(X));
-% for l = 1:length(YesData_train(1,:))
-%     X_fft(:,l) = abs(fft(YesData_train(:,l)));
-% end
-
-% try wavelet transform instead
-X_fft = tc_wavelet(X,rows,columns);
-X_test_wav = tc_wavelet(X_test,rows,columns);
-
-[U,S,V] = svd(X_fft,'econ');
 %% Graph some stuff
 
-%figure()
-sig = diag(S);
-[M,N] = size(X);
 
-%subplot(1,2,1), plot(sig(1:50),'ko','Linewidth',[1.5])
+k = 1;
+TestNum = length(pval); 
+figure()
+sgtitle('Incorrectly classified images')
+for i = 1:TestNum
+  if k > 9
+      break
+  end
+  if ResVec(i)~=hiddenlabels(i)
+      imm = reshape(X_test(:,i),rows,columns); 
+      subplot(3,3,k)
+      imshow(uint8(imm))
+      if ResVec(i) == 0
+          title('Classified as tumor')
+      else 
+          title('Classified as no tumor')
+      end
+      k = k+1;
+  end
+end
+
+
+figure()
+sig = sort(diag(S),'Descend');
+sgtitle('Singular values of each set')
+
+subplot(1,2,1), plot(sig(1:50),'ko','Linewidth',[1.5])
 ylabel('Singular Values')
 xlabel('Singular Value Along Diagonal')
 
-%subplot(1,2,2), semilogy(sig(1:50),'ko','Linewidth',[1.5])
+subplot(1,2,2), semilogy(sig(1:50),'ko','Linewidth',[1.5])
 ylabel('Log of Singular Values')
 xlabel('Singular Value Along Diagonal')
 
-%% Run through matlab classify
-
-numFeat = 30;
-
-xtrain = V(:,1:numFeat);
-xtest = U'*X_test_wav;
-
-ctrain = [repmat({'Tumor'},[size(YesData_train,2),1]);repmat({'NoTumor'},[size(NoData_train,2),1])];
-truth = [repmat({'Tumor'},[size(YesData_test,2),1]);repmat({'NoTumor'},[size(NoData_test,2),1])];
-
-svm.mod = fitcsvm(xtrain,ctrain);
-pre = predict(svm.mod,xtest(:,1:numFeat));
-
-num_correct = 0;
-for k = 1:length(truth)
-   if strcmp(pre{k},truth{k})
-        num_correct = num_correct + 1;
-   end
+figure ()
+sgtitle('First four principal components of the training data')
+for j=1:4
+  subplot(2,2,j) 
+  ut1=reshape(U(:,j),sqrt(size(U,1)),sqrt(size(U,1))); 
+  ut2=ut1(size(ut1,1):-1:1,:); 
+  pcolor(ut1), colormap(hot)
+  set(gca,'Xtick',[],'Ytick',[])
 end
-percentage(p) = (num_correct/length(truth))*100;
+
+figure()
+sgtitle('First three features of each set in training data')
+for j=1:3
+  subplot(3,2,2*j-1) 
+  plot(1:size(YesData,2),V(1:size(YesData,2),j),'ko-') 
+  subplot(3,2,2*j) 
+  plot(size(YesData,2)+1:size(V,1),V(size(YesData,2)+1:end,j),'ko-')
 end
-mean(percentage)
+subplot(3,2,1), title('Tumor')
+subplot(3,2,2), title('No Tumor')
