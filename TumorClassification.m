@@ -92,18 +92,22 @@ for i = 1:2
     subplot(2,2,2)
     imshow(uint8(im_n))
     title('No Tumor')
-
+    
     subplot(2,2,3)
     plot(ks,abs(fftshift(ys_f))/max(ys_f))
     xlim([-10000,10000])
-    ylim([0,0.2])
+    ylim([0,1])
     title('FFT Tumor')
-
+    ylabel('Amplitude')
+    xlabel('Frequency [Hz]')
+    
     subplot(2,2,4)
     plot(kns(1:end-1),abs(fftshift(ns_f))/max(ns_f))
     xlim([-10000,10000])
-    ylim([0,0.2])
+    ylim([0,1])
     title('FFT No Tumor')
+    ylabel('Amplitude')
+    xlabel('Frequency [Hz]')
 end
 
 %% Split into training test groups
@@ -226,11 +230,11 @@ figure()
 sig = sort(diag(S),'Descend');
 sgtitle('Singular values of each set')
 
-subplot(1,2,1), plot(sig(1:50),'ko','Linewidth',[1.5])
+subplot(2,1,1), plot(sig(1:50),'ko','Linewidth',[1.5])
 ylabel('Singular Values')
 xlabel('Singular Value Along Diagonal')
 
-subplot(1,2,2), semilogy(sig(1:50),'ko','Linewidth',[1.5])
+subplot(2,1,2), semilogy(sig(1:50),'ko','Linewidth',[1.5])
 ylabel('Log of Singular Values')
 xlabel('Singular Value Along Diagonal')
 
@@ -240,7 +244,8 @@ for j=1:4
   subplot(2,2,j) 
   ut1=reshape(U(:,j),sqrt(size(U,1)),sqrt(size(U,1))); 
   ut2=ut1(size(ut1,1):-1:1,:); 
-  pcolor(ut1), colormap(hot)
+  pcolor(ut1), %colormap(hot)
+  title(['mode' num2str(j)])
   set(gca,'Xtick',[],'Ytick',[])
 end
 
@@ -248,9 +253,18 @@ figure()
 sgtitle('First three features of each set in training data')
 for j=1:3
   subplot(3,2,2*j-1) 
-  plot(1:size(YesData,2),V(1:size(YesData,2),j),'ko-') 
-  subplot(3,2,2*j) 
+  plot(1:60,V(1:60,j),'ko-') 
+  ylabel(['Mode ' num2str(j)])
+  if j == 3
+      xlabel('num of images')
+  end
+  ylim([-0.2 0.2])
+  subplot(3,2,2*j)
   plot(size(YesData,2)+1:size(V,1),V(size(YesData,2)+1:end,j),'ko-')
+  if j == 3
+      xlabel('Num of images')
+  end
+  ylim([-0.2 0.2])
 end
 subplot(3,2,1), title('Tumor')
 subplot(3,2,2), title('No Tumor')
